@@ -2,6 +2,9 @@
 #include <chrono>
 #include <stdlib.h>
 #include <future>
+#include <filesystem>
+
+#include <sys/ioctl.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
@@ -14,6 +17,8 @@
 #else
 #include <unistd.h>
 #endif
+
+namespace fs = std::filesystem;
 
 namespace Date
 {
@@ -38,9 +43,38 @@ namespace Date
 
 int main(int argc, char *argv[])
 {
+	// Get input data
+	std::string videoPath;
+	
+	char input[1024];
+	
+	{
+		const char *home = getenv("HOME");
+		
+		bool isValid = false;
+		
+		while(!isValid)
+		{
+			std::cout << "Enter video file path: ";
+			std::cin.getline(input, 1024, '\n');
+			std::cout << std::endl;
+			
+			videoPath = std::string(input);
+			
+			// Replace ~ character with homepath
+			if(videoPath[0] == '~')
+			{
+				videoPath.replace(0, 1, "");
+				videoPath.insert(0, home);
+			}
+			
+			isValid = fs::exists(videoPath) && !fs::is_directory(videoPath);
+		}
+	}
+	
 	#pragma region Setup Capture
 	
-	cv::VideoCapture cap{ "./dist/bin/assets/video.mp4" };
+	cv::VideoCapture cap{ videoPath };
 	
 	if(!cap.isOpened())
 	{
@@ -51,25 +85,83 @@ int main(int argc, char *argv[])
 	cv::Mat startFrame;
 	cap >> startFrame;
 	
+	cv::resize(startFrame, startFrame, cv::Size(), 1., 0.5);
+	
+	
+	
+	int width = startFrame.cols;
+	int height = startFrame.rows;
+
+	{
+		int columns, rows;
+		
+		#ifdef _WIN32
+		// Windows
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+
+		GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+		columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+		rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+		
+		#else
+		// Unix
+		
+		struct winsize w;
+		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+		
+		columns = w.ws_col;
+		rows = w.ws_row;
+		
+		#endif
+		
+		float fWidth = static_cast<float>(width);
+		float fHeight = static_cast<float>(height);
+		
+		if(fHeight > rows - 2)
+		{
+			fHeight = rows - 2;
+			
+			fWidth = fWidth / ( ( fWidth / fHeight ) / ( static_cast<float>( startFrame.cols ) / startFrame.rows ) );
+		}
+		
+		if(fWidth > columns)
+		{
+			fWidth = columns;
+			
+			fHeight = fHeight * ( ( fWidth / fHeight ) / ( static_cast<float>( startFrame.cols ) / startFrame.rows ) );
+		}
+		
+		// Truncate towards zero
+		width = static_cast<int>(fWidth);
+		height = static_cast<int>(fHeight);
+	}
+	
 	#pragma endregion
 	
-	auto startTime = Date::now(Date::Unit::US);
+	
+	// Since they are unicode, they need to be stored independently as strings
+	std::string chr[] = { " ", "░", "▒", "▓", "█" };
+	int chrSize = sizeof(chr) / sizeof(*chr);
+	
+	std::string display = "";
+	display.reserve(width * ( height + 1 ) + 10);
 	
 	double updateDelay = Date::Unit::US * 1000. / cap.get(cv::CAP_PROP_FPS);
 	
-	std::string str = "";
-	str.reserve(startFrame.rows * startFrame.cols * 12);
-	
-	std::vector<std::string> chr = {" ", "░", "▒", "▓", "█"};
-	
+	// Clear console
 	std::cout << "\x1b[2J";
 	
 	// Start music
-	std::future<void> playMusic( std::async(std::launch::async, []()
-	{
-		system("mplayer -vo null ./dist/bin/assets/video.mp4 > /dev/null");
-		return;
-	}));
+	auto startTime = Date::now(Date::Unit::US);
+	
+	std::future<void> playMusic( std::async(std::launch::async,
+		[videoPath]()
+		{
+			std::string command = std::string("mplayer -vo null ") + videoPath + " > /dev/null";
+			
+			system(command.data());
+		}
+	));
 	
 	while(true)
 	{
@@ -84,10 +176,10 @@ int main(int argc, char *argv[])
 
 				if(!cap.read(frame)) break;
 
-				cv::resize(frame, frame, cv::Size(), 0.4, 0.2, cv::INTER_AREA);
+				cv::resize(frame, frame, cv::Size(width, height), 0., 0., cv::INTER_AREA);
 				cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
 				
-				str.clear();
+				display.clear();
 				
 				for(int j = 0; j < frame.rows; j++)
 				{
@@ -95,21 +187,22 @@ int main(int argc, char *argv[])
 					{
 						uchar value = frame.at<uchar>(j, i);
 						
-						str += chr[ static_cast<int>(std::floor( chr.size() * value / 256. )) ];
+						display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
 						
-						// str += "\x1b[48;2;";
-						// str += std::to_string(value[2]);
-						// str += ";";
-						// str += std::to_string(value[1]);
-						// str += ";";
-						// str += std::to_string(value[0]);
-						// str += "m ";
+						// For RGB
+						// display += "\x1b[48;2;";
+						// display += std::to_string(value[2]);
+						// display += ";";
+						// display += std::to_string(value[1]);
+						// display += ";";
+						// display += std::to_string(value[0]);
+						// display += "m ";
 					}
 					
-					str.append("\n");
+					display.append("\n");
 				}
 				
-				std::cout << "\x1b[1;1H" << str;
+				std::cout << "\x1b[1;1H" << display;
 			}
 			else
 			{
@@ -120,7 +213,12 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-	std::cout << "\x1b[0m";
+	cap.release();
+	
+	std::cout << "\x1b[0m\x1b[1000B\x1b[1G";
+	
+	playMusic.get();
+	
 	
 	return 0;
 }
