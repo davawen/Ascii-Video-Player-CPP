@@ -1,5 +1,7 @@
 #include <iostream>
 #include <chrono>
+#include <stdlib.h>
+#include <future>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
@@ -38,7 +40,7 @@ int main(int argc, char *argv[])
 {
 	#pragma region Setup Capture
 	
-	cv::VideoCapture cap{"./nichijou_op.mp4"};
+	cv::VideoCapture cap{ "./dist/bin/assets/video.mp4" };
 	
 	if(!cap.isOpened())
 	{
@@ -58,9 +60,16 @@ int main(int argc, char *argv[])
 	std::string str = "";
 	str.reserve(startFrame.rows * startFrame.cols * 12);
 	
-	char chr[] = { '.', '\'', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@'};
+	std::vector<std::string> chr = {" ", "░", "▒", "▓", "█"};
 	
 	std::cout << "\x1b[2J";
+	
+	// Start music
+	std::future<void> playMusic( std::async(std::launch::async, []()
+	{
+		system("mplayer -vo null ./dist/bin/assets/video.mp4 > /dev/null");
+		return;
+	}));
 	
 	while(true)
 	{
@@ -75,26 +84,28 @@ int main(int argc, char *argv[])
 
 				if(!cap.read(frame)) break;
 
-				cv::resize(frame, frame, cv::Size(), 0.14, 0.07, cv::INTER_AREA);
-
+				cv::resize(frame, frame, cv::Size(), 0.4, 0.2, cv::INTER_AREA);
+				cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
+				
 				str.clear();
-
+				
 				for(int j = 0; j < frame.rows; j++)
 				{
 					for(int i = 0; i < frame.cols; i++)
 					{
-						cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
+						uchar value = frame.at<uchar>(j, i);
 						
-						// str += chr[ static_cast<int>(std::floor( 14. * value )) ];
-						str += "\x1b[48;2;";
-						str += std::to_string(value[2]);
-						str += ";";
-						str += std::to_string(value[1]);
-						str += ";";
-						str += std::to_string(value[0]);
-						str += "m ";
+						str += chr[ static_cast<int>(std::floor( chr.size() * value / 256. )) ];
+						
+						// str += "\x1b[48;2;";
+						// str += std::to_string(value[2]);
+						// str += ";";
+						// str += std::to_string(value[1]);
+						// str += ";";
+						// str += std::to_string(value[0]);
+						// str += "m ";
 					}
-
+					
 					str.append("\n");
 				}
 				

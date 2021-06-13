@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -Wall -Wno-unknown-pragmas
+CXXFLAGS = -Wall -Wno-unknown-pragmas -pthread
 
 EXEC_NAME = main
 
@@ -23,7 +23,7 @@ all: dist prog
 
 # Can't use object files apparently for some reason
 prog: $(SRC_FILES)
-	$(CXX) $(SRC_FILES) $(INCLUDE_PATH) $(LIB_PATH) $(LIBS) -o dist/bin/$(EXEC_NAME)
+	$(CXX) $(CXXFLAGS) $(SRC_FILES) $(INCLUDE_PATH) $(LIB_PATH) $(LIBS) -o dist/bin/$(EXEC_NAME)
 
 clean: dist
 	rm -rf dist/bin/$(EXEC_NAME)
