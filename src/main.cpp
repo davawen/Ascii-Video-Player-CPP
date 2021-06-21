@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
 	std::future<void> playMusic( std::async(std::launch::async,
 		[videoPath]()
 		{
-			std::string command = std::string("mplayer -vo null ") + videoPath + " > /dev/null";
+			std::string command = std::string("mplayer -vo null -slave ") + videoPath + " > /dev/null";
 			
 			system(command.data());
 		}
@@ -174,10 +174,10 @@ int main(int argc, char *argv[])
 			{
 				cv::Mat frame;
 
-				if(!cap.read(frame)) break;
+				if(!cap.read(frame)) goto endLoop;
 
 				cv::resize(frame, frame, cv::Size(width, height), 0., 0., cv::INTER_AREA);
-				cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
+				// cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
 				
 				display.clear();
 				
@@ -185,18 +185,20 @@ int main(int argc, char *argv[])
 				{
 					for(int i = 0; i < frame.cols; i++)
 					{
-						uchar value = frame.at<uchar>(j, i);
+						// uchar value = frame.at<uchar>(j, i);
 						
-						display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
+						// display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
 						
 						// For RGB
-						// display += "\x1b[48;2;";
-						// display += std::to_string(value[2]);
-						// display += ";";
-						// display += std::to_string(value[1]);
-						// display += ";";
-						// display += std::to_string(value[0]);
-						// display += "m ";
+						cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
+						
+						display += "\x1b[48;2;";
+						display += std::to_string(value[2]);
+						display += ";";
+						display += std::to_string(value[1]);
+						display += ";";
+						display += std::to_string(value[0]);
+						display += "m ";
 					}
 					
 					display.append("\n");
@@ -206,12 +208,14 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				if(!cap.grab()) break;
+				if(!cap.grab()) goto endLoop;
 			}
 			
 			startTime += updateDelay;
 		}
 	}
+	
+endLoop:
 	
 	cap.release();
 	

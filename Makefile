@@ -1,5 +1,6 @@
 CXX = g++
-CXXFLAGS = -Wall -Wno-unknown-pragmas -pthread
+CXXFLAGS = -Wall -Wno-unknown-pragmas
+CXXLINKFLAGS = -pthread
 
 EXEC_NAME = main
 
@@ -13,26 +14,27 @@ INCLUDE_PATH = /usr/local/include/opencv4/
 # The rest is madness
 
 SRC_FILES := $(addprefix src/,$(SRC_FILES))
+OBJ_FILES = $(SRC_FILES:src/%.cpp=dist/obj/%.o)
 
 LIBS := $(addprefix -l,$(LIBS))
 LIB_PATH := $(addprefix -L,$(LIB_PATH))
 INCLUDE_PATH := $(addprefix -I,$(INCLUDE_PATH))
 
-all: dist prog
+all: prog
 	./dist/bin/$(EXEC_NAME)
 
-# Can't use object files apparently for some reason
-prog: $(SRC_FILES)
-	$(CXX) $(CXXFLAGS) $(SRC_FILES) $(INCLUDE_PATH) $(LIB_PATH) $(LIBS) -o dist/bin/$(EXEC_NAME)
+prog: $(OBJ_FILES)
+	$(CXX) $(CXXLINKFLAGS) $^ $(LIB_PATH) $(LIBS) -o dist/bin/$(EXEC_NAME)
 
-clean: dist
-	rm -rf dist/bin/$(EXEC_NAME)
+dist/obj/%.o: src/%.cpp
+	$(CXX) -c $(CXXFLAGS) -o $@ $< $(INCLUDE_PATH)
 
-dist:
-	mkdir dist dist/bin
+clean:
+	rm -rf dist/bin/$(EXEC_NAME) dist/obj/*.o
 
-test_config:
+test:
 	@echo Source Files: $(SRC_FILES)
+	@echo Object Files: $(OBJ_FILES)
 	@echo Libs: $(LIBS)
 	@echo Lib Path: $(LIB_PATH)
 	@echo Include Path: $(INCLUDE_PATH)
