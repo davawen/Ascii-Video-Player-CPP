@@ -12,6 +12,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/videoio/videoio.hpp>
 
+
 #ifdef _WIN32
 #include <Windows.h>
 #else
@@ -43,32 +44,58 @@ namespace Date
 
 int main(int argc, char *argv[])
 {
-	// Get input data
+	// Get input, such as video path, color mode wanted etc...
 	std::string videoPath;
-	
-	char input[1024];
+	bool useColor;
 	
 	{
+		char input[1024];
+		
+		// Get home directory
 		const char *home = getenv("HOME");
 		
-		bool isValid = false;
-		
-		while(!isValid)
+		do
 		{
 			std::cout << "Enter video file path: ";
 			std::cin.getline(input, 1024, '\n');
-			std::cout << std::endl;
 			
 			videoPath = std::string(input);
 			
-			// Replace ~ character with homepath
+			// Replace ~ character with home directory
 			if(videoPath[0] == '~')
 			{
 				videoPath.replace(0, 1, "");
 				videoPath.insert(0, home);
 			}
+		}
+		while(!fs::exists(videoPath) || fs::is_directory(videoPath));
+
+		while(true)
+		{
 			
-			isValid = fs::exists(videoPath) && !fs::is_directory(videoPath);
+			
+			std::cout << "Wether to use color(y/N): ";
+			std::cin.getline(input, 2, '\n');
+			
+			std::cout << input << std::endl;
+			
+			switch(input[0])
+			{
+				case 'y':
+				case 'Y':
+					useColor = true;
+					break;
+				case 'n':
+				case 'N':
+				case ' ':
+				case '\0':
+					useColor = false;
+					break;
+				default:
+					continue;
+			}
+			
+			break;
 		}
 	}
 	
@@ -87,11 +114,11 @@ int main(int argc, char *argv[])
 	
 	cv::resize(startFrame, startFrame, cv::Size(), 1., 0.5);
 	
-	
-	
 	int width = startFrame.cols;
 	int height = startFrame.rows;
 
+	// Limit video size to console size
+	// Scope for cleanness
 	{
 		int columns, rows;
 		
@@ -152,16 +179,17 @@ int main(int argc, char *argv[])
 	std::cout << "\x1b[2J";
 	
 	// Start music
-	auto startTime = Date::now(Date::Unit::US);
 	
-	std::future<void> playMusic( std::async(std::launch::async,
+	std::future<void> playMusic(std::async(std::launch::async,
 		[videoPath]()
 		{
-			std::string command = std::string("mplayer -vo null -slave ") + videoPath + " > /dev/null";
-			
-			system(command.data());
+			char cmd[512];
+			snprintf(cmd, 512, "mplayer -vo null -fs -slave -idle \"%s\" %s", videoPath.c_str(), "> /dev/null");
+			system(cmd);
 		}
 	));
+
+	auto startTime = Date::now(Date::Unit::US);
 	
 	while(true)
 	{
@@ -177,7 +205,8 @@ int main(int argc, char *argv[])
 				if(!cap.read(frame)) goto endLoop;
 
 				cv::resize(frame, frame, cv::Size(width, height), 0., 0., cv::INTER_AREA);
-				// cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
+				
+				if(!useColor) cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
 				
 				display.clear();
 				
@@ -185,26 +214,31 @@ int main(int argc, char *argv[])
 				{
 					for(int i = 0; i < frame.cols; i++)
 					{
-						// uchar value = frame.at<uchar>(j, i);
-						
-						// display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
-						
-						// For RGB
-						cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
-						
-						display += "\x1b[48;2;";
-						display += std::to_string(value[2]);
-						display += ";";
-						display += std::to_string(value[1]);
-						display += ";";
-						display += std::to_string(value[0]);
-						display += "m ";
+						//RGB
+						if(useColor)
+						{
+							cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
+							
+							display += "\x1b[48;2;";
+							display += std::to_string(value[2]);
+							display += ";";
+							display += std::to_string(value[1]);
+							display += ";";
+							display += std::to_string(value[0]);
+							display += "m ";
+						}
+						else
+						{
+							uint8_t value = frame.at<uint8_t>(j, i);
+							
+							display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
+						}
 					}
 					
-					display.append("\n");
+					display += '\n';
 				}
 				
-				std::cout << "\x1b[1;1H" << display;
+				std::cout << "\x1b[1;1H" << display << "\x1b[0m";
 			}
 			else
 			{
@@ -214,6 +248,8 @@ int main(int argc, char *argv[])
 			startTime += updateDelay;
 		}
 	}
+
+endLoop:
 	
 endLoop:
 	
@@ -222,7 +258,6 @@ endLoop:
 	std::cout << "\x1b[0m\x1b[1000B\x1b[1G";
 	
 	playMusic.get();
-	
 	
 	return 0;
 }
