@@ -167,11 +167,22 @@ int main(int argc, char *argv[])
 	
 	
 	// Since they are unicode, they need to be stored independently as strings
-	std::string chr[] = { " ", "░", "▒", "▓", "█" };
+	// std::string chr[] = { " ", "░", "▒", "▓", "█" };
+	std::string chr[] =
+	{
+		"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
+		"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
+		"\x1b[48;5;244m ", "\x1b[48;5;246m ", "\x1b[48;5;248m ",
+		"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
+	};
+	// char chr[] = { ' ', '.', '\'', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };
+	
 	int chrSize = sizeof(chr) / sizeof(*chr);
 	
 	std::string display = "";
-	display.reserve(width * ( height + 1 ) + 10);
+	
+	if(!useColor) display.reserve(( width * ( height + 1 ) ) * sizeof(*chr));
+	else display.reserve(( width * ( height + 1 ) ) * ( 20 ));
 	
 	double updateDelay = Date::Unit::US * 1000. / cap.get(cv::CAP_PROP_FPS);
 	
@@ -188,8 +199,10 @@ int main(int argc, char *argv[])
 			system(cmd);
 		}
 	));
-
+	
 	auto startTime = Date::now(Date::Unit::US);
+	
+	
 	
 	while(true)
 	{
@@ -214,11 +227,16 @@ int main(int argc, char *argv[])
 				{
 					for(int i = 0; i < frame.cols; i++)
 					{
-						//RGB
-						if(useColor)
+						if(!useColor)
 						{
+							uint8_t value = frame.at<uint8_t>(j, i);
+
+							display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
+						}
+						else
+						{							
 							cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
-							
+
 							display += "\x1b[48;2;";
 							display += std::to_string(value[2]);
 							display += ";";
@@ -226,12 +244,6 @@ int main(int argc, char *argv[])
 							display += ";";
 							display += std::to_string(value[0]);
 							display += "m ";
-						}
-						else
-						{
-							uint8_t value = frame.at<uint8_t>(j, i);
-							
-							display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
 						}
 					}
 					
@@ -249,8 +261,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-endLoop:
-	
 endLoop:
 	
 	cap.release();
