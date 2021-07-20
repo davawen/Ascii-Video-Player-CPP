@@ -14,28 +14,26 @@ INCLUDE_PATH = /usr/local/include/opencv4/
 # The rest is madness
 
 SRC_FILES := $(addprefix src/,$(SRC_FILES))
-OBJ_FILES := $(SRC_FILES:src/%.cpp=dist/obj/%.o)
+OBJ_FILES := $(SRC_FILES:src/%.cpp=build/obj/%.o)
 
 LIBS := $(addprefix -l,$(LIBS))
 LIB_PATH := $(addprefix -L,$(LIB_PATH))
 INCLUDE_PATH := $(addprefix -I,$(INCLUDE_PATH))
 
-dist = dist/ dist/bin dist/obj
-
-all: dist prog
-	./dist/bin/$(EXEC_NAME)
+all: prog
+	./build/bin/$(EXEC_NAME)
 
 prog: $(OBJ_FILES)
-	$(CXX) $(CXXLINKFLAGS) $(LIB_PATH) $(LIBS) $^ -o dist/bin/$(EXEC_NAME)
+	$(CXX) $(CXXLINKFLAGS) $(LIB_PATH) $(LIBS) $^ -o build/bin/$(EXEC_NAME)
 
-dist/obj/%.o: src/%.cpp
+build/obj/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE_PATH) -o $@ $< 
 
-clean: dist
-	rm -rf dist/bin/$(EXEC_NAME) dist/obj/*.o
+clean:
+	rm -rf build/bin/$(EXEC_NAME) build/obj/*.o
 
-dist:
-	mkdir dist dist/bin dist/obj
+init:
+	mkdir -p build/bin build/obj
 
 test:
 	@echo Source Files: $(SRC_FILES)

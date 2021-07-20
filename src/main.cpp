@@ -47,6 +47,7 @@ int main(int argc, char *argv[])
 	// Get input, such as video path, color mode wanted etc...
 	std::string videoPath;
 	bool useColor;
+	int chrMode;
 	
 	{
 		char input[1024];
@@ -72,12 +73,8 @@ int main(int argc, char *argv[])
 
 		while(true)
 		{
-			
-			
 			std::cout << "Wether to use color(y/N): ";
 			std::cin.getline(input, 2, '\n');
-			
-			std::cout << input << std::endl;
 			
 			switch(input[0])
 			{
@@ -90,6 +87,31 @@ int main(int argc, char *argv[])
 				case ' ':
 				case '\0':
 					useColor = false;
+					// Choose char mode
+					while(true)
+					{
+						std::cout << "How it should be rendered(BLOCK, ascii, black and white) (0, 1, 2): ";
+						std::cin.getline(input, 2, '\n');
+
+						switch(input[0])
+						{
+							case '0':
+							case '\0':
+							case ' ':
+								chrMode = 0;
+								break;
+							case '1':
+								chrMode = 1;
+								break;
+							case '2':
+								chrMode = 2;
+								break;
+							default:
+								continue;
+						}
+
+						break;
+					}
 					break;
 				default:
 					continue;
@@ -165,24 +187,55 @@ int main(int argc, char *argv[])
 	
 	#pragma endregion
 	
+
+	char **chr;
+	int chrSize;
+	int chrOffset;
 	
-	// Since they are unicode, they need to be stored independently as strings
-	// std::string chr[] = { " ", "░", "▒", "▓", "█" };
-	std::string chr[] =
+	#pragma Set charact based on char mode
+	
+	// Since they are unicode, they need to be stored as pointer arrays
+	char *_chr0[] = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
+	char *_chr1[] = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+	char *_chr2[] =
 	{
 		"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
 		"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
 		"\x1b[48;5;244m ", "\x1b[48;5;246m ", "\x1b[48;5;248m ",
 		"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
 	};
-	// char chr[] = { ' ', '.', '\'', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };
 	
-	int chrSize = sizeof(chr) / sizeof(*chr);
+	switch(chrMode)
+	{
+		case 0:
+			chr = _chr0;
+			chrOffset = sizeof(*_chr0);
+			chrSize = sizeof(_chr0);
+			break;
+		case 1:
+			chr = _chr1;
+			chrOffset = sizeof(*_chr1);
+			chrSize = sizeof(_chr1);
+			break;
+		case 2:
+			chr = _chr2;
+			chrOffset = sizeof(*_chr2);
+			chrSize = sizeof(_chr2);
+			break;
+		default:
+			std::cout << "Undefined color mode choosen" << std::endl;
+			return -1;
+	}
+	
+	chrSize /= chrOffset;
 	
 	std::string display = "";
 	
-	if(!useColor) display.reserve(( width * ( height + 1 ) ) * sizeof(*chr));
-	else display.reserve(( width * ( height + 1 ) ) * ( 20 ));
+	// Reserve required memory for the entire screen
+	if(!useColor)
+		display.reserve((width * (height + 1)) * chrOffset);
+	else
+		display.reserve((width * (height + 1)) * 20);
 	
 	double updateDelay = Date::Unit::US * 1000. / cap.get(cv::CAP_PROP_FPS);
 	
@@ -195,7 +248,7 @@ int main(int argc, char *argv[])
 		[videoPath]()
 		{
 			char cmd[512];
-			snprintf(cmd, 512, "mplayer -vo null -fs -slave -idle \"%s\" %s", videoPath.c_str(), "> /dev/null");
+			snprintf(cmd, 512, "mplayer -vo null -slave \"%s\" %s", videoPath.c_str(), "> /dev/null");
 			system(cmd);
 		}
 	));
@@ -230,13 +283,13 @@ int main(int argc, char *argv[])
 						if(!useColor)
 						{
 							uint8_t value = frame.at<uint8_t>(j, i);
-
+							
 							display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
 						}
 						else
 						{							
 							cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
-
+							
 							display += "\x1b[48;2;";
 							display += std::to_string(value[2]);
 							display += ";";
