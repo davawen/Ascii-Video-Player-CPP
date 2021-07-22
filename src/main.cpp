@@ -188,16 +188,16 @@ int main(int argc, char *argv[])
 	#pragma endregion
 	
 
-	char **chr;
+	const char **chr;
 	int chrSize;
 	int chrOffset;
 	
-	#pragma Set charact based on char mode
+	#pragma Set chr based on char mode
 	
 	// Since they are unicode, they need to be stored as pointer arrays
-	char *_chr0[] = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
-	char *_chr1[] = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
-	char *_chr2[] =
+	const char *_chr0[] = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
+	const char *_chr1[] = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+	const char *_chr2[] =
 	{
 		"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
 		"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
