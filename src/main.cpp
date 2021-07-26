@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 	// Get input, such as video path, color mode wanted etc...
 	std::string videoPath;
 	bool useColor;
-	int chrMode;
+	int chrMode = 0;
 	
 	{
 		char input[1024];

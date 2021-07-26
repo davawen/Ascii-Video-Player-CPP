@@ -20,7 +20,9 @@ LIBS := $(addprefix -l,$(LIBS))
 LIB_PATH := $(addprefix -L,$(LIB_PATH))
 INCLUDE_PATH := $(addprefix -I,$(INCLUDE_PATH))
 
-all: prog
+all: prog run
+
+run:
 	./build/bin/$(EXEC_NAME)
 
 prog: $(OBJ_FILES)
