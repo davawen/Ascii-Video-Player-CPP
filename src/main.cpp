@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <future>
 #include <filesystem>
+#include <sstream>
 
 #include <sys/ioctl.h>
 
@@ -42,8 +43,10 @@ namespace Date
 	}
 }
 
-int main(int argc, char *argv[])
+int main(/* int argc, char *argv[] */)
 {
+	
+	
 	// Get input, such as video path, color mode wanted etc...
 	std::string videoPath;
 	bool useColor;
@@ -192,52 +195,46 @@ int main(int argc, char *argv[])
 	int chrSize;
 	int chrOffset;
 	
-	#pragma Set chr based on char mode
-	
-	// Since they are unicode, they need to be stored as pointer arrays
-	const char *_chr0[] = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
-	const char *_chr1[] = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
-	const char *_chr2[] =
+	#pragma region Set chr based on char mode
 	{
-		"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
-		"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
-		"\x1b[48;5;244m ", "\x1b[48;5;246m ", "\x1b[48;5;248m ",
-		"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
-	};
-	
-	switch(chrMode)
-	{
-		case 0:
-			chr = _chr0;
-			chrOffset = sizeof(*_chr0);
-			chrSize = sizeof(_chr0);
-			break;
-		case 1:
-			chr = _chr1;
-			chrOffset = sizeof(*_chr1);
-			chrSize = sizeof(_chr1);
-			break;
-		case 2:
-			chr = _chr2;
-			chrOffset = sizeof(*_chr2);
-			chrSize = sizeof(_chr2);
-			break;
-		default:
-			std::cout << "Undefined color mode choosen" << std::endl;
-			return -1;
+		// Since they are unicode, they need to be stored as pointer arrays
+		const char *_chr0[] = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
+		const char *_chr1[] = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+		const char *_chr2[] =
+		{
+			"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
+			"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
+			"\x1b[48;5;244m ", "\x1b[48;5;246m ", "\x1b[48;5;248m ",
+			"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
+		};
+		
+		switch(chrMode)
+		{
+			case 0:
+				chr = _chr0;
+				chrOffset = sizeof(*_chr0);
+				chrSize = sizeof(_chr0);
+				break;
+			case 1:
+				chr = _chr1;
+				chrOffset = sizeof(*_chr1);
+				chrSize = sizeof(_chr1);
+				break;
+			case 2:
+				chr = _chr2;
+				chrOffset = sizeof(*_chr2);
+				chrSize = sizeof(_chr2);
+				break;
+			default:
+				std::cout << "Undefined color mode choosen" << std::endl;
+				return -1;
+		}
+		
+		chrSize /= chrOffset;
 	}
+	#pragma endregion
 	
-	chrSize /= chrOffset;
-	
-	std::string display = "";
-	
-	// Reserve required memory for the entire screen
-	if(!useColor)
-		display.reserve((width * (height + 1)) * chrOffset);
-	else
-		display.reserve((width * (height + 1)) * 20);
-	
-	double updateDelay = Date::Unit::US * 1000. / cap.get(cv::CAP_PROP_FPS);
+	double updateDelay = static_cast<double>(Date::Unit::US) * 1000. / cap.get(cv::CAP_PROP_FPS);
 	
 	// Clear console
 	std::cout << "\x1b[2J";
@@ -255,7 +252,7 @@ int main(int argc, char *argv[])
 	
 	auto startTime = Date::now(Date::Unit::US);
 	
-	
+	std::setvbuf(stdout, nullptr, _IOFBF, BUFSIZ); // Set stdout to be fully buffered
 	
 	while(true)
 	{
@@ -274,7 +271,7 @@ int main(int argc, char *argv[])
 				
 				if(!useColor) cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
 				
-				display.clear();
+				printf("\x1b[1;1H");
 				
 				for(int j = 0; j < frame.rows; j++)
 				{
@@ -283,27 +280,22 @@ int main(int argc, char *argv[])
 						if(!useColor)
 						{
 							uint8_t value = frame.at<uint8_t>(j, i);
-							
-							display += chr[static_cast<int>( std::floor(chrSize * value / 256.) )];
+
+							printf("%s", chr[static_cast<int>(std::floor(chrSize * value / 256.))]);
 						}
 						else
 						{							
 							cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
 							
-							display += "\x1b[48;2;";
-							display += std::to_string(value[2]);
-							display += ";";
-							display += std::to_string(value[1]);
-							display += ";";
-							display += std::to_string(value[0]);
-							display += "m ";
+							printf("\x1b[48;2;%hhu;%hhu;%hhum ", value[2], value[1], value[0]);
 						}
 					}
 					
-					display += '\n';
+					std::cout.put('\n');
 				}
 				
-				std::cout << "\x1b[1;1H" << display << "\x1b[0m";
+				printf("\x1b[0m");
+				std::cout.flush();
 			}
 			else
 			{
