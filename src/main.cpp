@@ -43,37 +43,29 @@ namespace Date
 	}
 }
 
-int main(/* int argc, char *argv[] */)
+int main(int argc, char *argv[])
 {
-	
+	if(argc != 2)
+	{
+		std::cout << "Usage: AsciiVideoPlayer file\n";
+		return -1;
+	}
 	
 	// Get input, such as video path, color mode wanted etc...
-	std::string videoPath;
+	std::string videoPath = std::string(argv[1]);
+
+	if(!fs::exists(videoPath) || fs::is_directory(videoPath))
+	{
+		std::cout << "Non valid video path given.\n";
+		return -1;
+	}
+
 	bool useColor;
 	int chrMode = 0;
 	
 	{
 		char input[1024];
 		
-		// Get home directory
-		const char *home = getenv("HOME");
-		
-		do
-		{
-			std::cout << "Enter video file path: ";
-			std::cin.getline(input, 1024, '\n');
-			
-			videoPath = std::string(input);
-			
-			// Replace ~ character with home directory
-			if(videoPath[0] == '~')
-			{
-				videoPath.replace(0, 1, "");
-				videoPath.insert(0, home);
-			}
-		}
-		while(!fs::exists(videoPath) || fs::is_directory(videoPath));
-
 		while(true)
 		{
 			std::cout << "Wether to use color(y/N): ";
