@@ -7,7 +7,7 @@ endif()
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -17,6 +17,7 @@ add_executable(AsciiVideoPlayer ./src/main.cpp)
 
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
+find_package(fmt REQUIRED)
 
 # Headers
 target_include_directories(AsciiVideoPlayer PRIVATE ${OpenCV_INCLUDE_DIRS})
@@ -26,6 +27,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 target_link_libraries(AsciiVideoPlayer PRIVATE Threads::Threads)
 
 target_link_libraries(AsciiVideoPlayer PRIVATE ${OpenCV_LIBS})
+target_link_libraries(AsciiVideoPlayer PRIVATE fmt::fmt)
 
 # Compilation
 

@@ -4,6 +4,9 @@
 #include <future>
 #include <filesystem>
 #include <sstream>
+#include <string>
+// #include <format> No std::format support for g++ yet :(
+#include <fmt/core.h>
 
 #include <sys/ioctl.h>
 
@@ -61,7 +64,12 @@ int main(int argc, char *argv[])
 	}
 
 	bool useColor;
-	int chrMode = 0;
+	enum CharMode
+	{
+		BLOCK,
+		ASCII,
+		GREYSCALE
+	} chrMode = BLOCK;
 	
 	{
 		char input[1024];
@@ -85,21 +93,24 @@ int main(int argc, char *argv[])
 					// Choose char mode
 					while(true)
 					{
-						std::cout << "How it should be rendered(BLOCK, ascii, black and white) (0, 1, 2): ";
+						std::cout << "How it should be rendered([B]lock(default), [A]scii, black and [W]hite): ";
 						std::cin.getline(input, 2, '\n');
 
 						switch(input[0])
 						{
-							case '0':
+							case 'b':
+							case 'B':
 							case '\0':
 							case ' ':
-								chrMode = 0;
+								chrMode = BLOCK;
 								break;
-							case '1':
-								chrMode = 1;
+							case 'a':
+							case 'A':
+								chrMode = ASCII;
 								break;
-							case '2':
-								chrMode = 2;
+							case 'w':
+							case 'W':
+								chrMode = GREYSCALE;
 								break;
 							default:
 								continue;
@@ -182,49 +193,36 @@ int main(int argc, char *argv[])
 	
 	#pragma endregion
 	
-
-	const char **chr;
-	int chrSize;
-	int chrOffset;
-	
-	#pragma region Set chr based on char mode
+	// Since they are unicode, they need to be stored as pointer arrays
+	std::vector<const char *> blockChars = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
+	std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+	std::vector<const char *> greyscaleChars =
 	{
-		// Since they are unicode, they need to be stored as pointer arrays
-		const char *_chr0[] = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
-		const char *_chr1[] = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
-		const char *_chr2[] =
-		{
-			"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
-			"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
-			"\x1b[48;5;244m ", "\x1b[48;5;246m ", "\x1b[48;5;248m ",
-			"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
-		};
-		
-		switch(chrMode)
-		{
-			case 0:
-				chr = _chr0;
-				chrOffset = sizeof(*_chr0);
-				chrSize = sizeof(_chr0);
-				break;
-			case 1:
-				chr = _chr1;
-				chrOffset = sizeof(*_chr1);
-				chrSize = sizeof(_chr1);
-				break;
-			case 2:
-				chr = _chr2;
-				chrOffset = sizeof(*_chr2);
-				chrSize = sizeof(_chr2);
-				break;
-			default:
-				std::cout << "Undefined color mode choosen" << std::endl;
-				return -1;
-		}
-		
-		chrSize /= chrOffset;
+		"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
+		"\x1b[48;5;238m ", "\x1b[48;5;240m ", "\x1b[48;5;242m ",
+		"\x1b[48;5;244m ", "\x1b[48;5;246m ", "\x1b[48;5;248m ",
+		"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
+	};
+
+	std::vector<const char *> *charsPtr;
+	
+	switch(chrMode)
+	{
+		case BLOCK:
+			charsPtr = &blockChars;
+			break;
+		case ASCII:
+			charsPtr = &asciiChars;
+			break;
+		case GREYSCALE:
+			charsPtr = &greyscaleChars;
+			break;
+		default:
+			std::cout << "Undefined color mode choosen\n";
+			return -1;
 	}
-	#pragma endregion
+
+	std::vector<const char *> &chars = *charsPtr;
 	
 	double updateDelay = static_cast<double>(Date::Unit::US) * 1000. / cap.get(cv::CAP_PROP_FPS);
 	
@@ -236,9 +234,8 @@ int main(int argc, char *argv[])
 	std::future<void> playMusic(std::async(std::launch::async,
 		[videoPath]()
 		{
-			char cmd[512];
-			snprintf(cmd, 512, "mplayer -vo null -slave \"%s\" %s", videoPath.c_str(), "> /dev/null");
-			system(cmd);
+			std::string cmd = fmt::format("mplayer -vo null -slave \"{}\" {}", videoPath, "> /dev/null");
+			system(cmd.c_str());
 		}
 	));
 	
@@ -263,7 +260,7 @@ int main(int argc, char *argv[])
 				
 				if(!useColor) cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
 				
-				printf("\x1b[1;1H");
+				fmt::print("\x1b[1;1H");
 				
 				for(int j = 0; j < frame.rows; j++)
 				{
@@ -273,20 +270,20 @@ int main(int argc, char *argv[])
 						{
 							uint8_t value = frame.at<uint8_t>(j, i);
 
-							printf("%s", chr[static_cast<int>(std::floor(chrSize * value / 256.))]);
+							fmt::print("{}", chars[static_cast<int>(std::floor(chars.size() * value / 256.))]);
 						}
 						else
 						{							
 							cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
 							
-							printf("\x1b[48;2;%hhu;%hhu;%hhum ", value[2], value[1], value[0]);
+							fmt::print("\x1b[48;2;{};{};{}m ", value[2], value[1], value[0]);
 						}
 					}
 					
-					std::cout.put('\n');
+					putc('\n', stdout);
 				}
 				
-				printf("\x1b[0m");
+				fmt::print("\x1b[0m");
 				std::cout.flush();
 			}
 			else
