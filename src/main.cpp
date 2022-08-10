@@ -25,25 +25,25 @@
 
 namespace fs = std::filesystem;
 
-namespace Date
+using namespace std::chrono_literals;
+
+/**
+ * Returns the amount of time since the processor was started in the given unit
+ */
+template <typename Unit>
+Unit now()
 {
-	enum Unit
-	{
-		/**Nanosecond*/
-		NS = 1,
-		/**Microsecond*/
-		US = 1000,
-		/**Milisecond*/
-		MS = 1000000
-	};
-	
-	/**
-	 * Returns the amount of time since the processor was started in the given unit
-	 */
-	long now(Unit unit = Unit::MS)
-	{
-		return std::chrono::high_resolution_clock::now().time_since_epoch().count() / unit;
-	}
+	return std::chrono::duration_cast<Unit>(std::chrono::high_resolution_clock::now().time_since_epoch());
+}
+
+template <typename T>
+inline T &sample_array(cv::uint8_t v, std::vector<T> &vector) {
+	return vector[ v * vector.size() / 255 ];
+}
+
+template <typename T>
+inline const T &sample_array(cv::uint8_t v, const std::vector<T> &vector) {
+	return vector[ v * vector.size() / 255 ];
 }
 
 int main(int argc, char *argv[])
@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 		std::cout << "Usage: AsciiVideoPlayer file\n";
 		return -1;
 	}
-	
+
 	// Get input, such as video path, color mode wanted etc...
 	std::string videoPath = std::string(argv[1]);
 
@@ -63,66 +63,71 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	bool useColor;
 	enum CharMode
 	{
 		BLOCK,
 		ASCII,
-		GREYSCALE
 	} chrMode = BLOCK;
+
+	enum ColorMode
+	{
+		GRAYSCALE,
+		COLOR,
+		TRUE_COLOR
+	} colorMode = COLOR;
 	
 	{
 		char input[1024];
 		
 		while(true)
 		{
-			std::cout << "Wether to use color(y/N): ";
+			std::cout << "Color palette([C]olor(default), [G]rayscale, [T]rue Color): ";
 			std::cin.getline(input, 2, '\n');
 			
 			switch(input[0])
 			{
-				case 'y':
-				case 'Y':
-					useColor = true;
-					break;
-				case 'n':
-				case 'N':
+				case 'c':
+				case 'C':
 				case ' ':
 				case '\0':
-					useColor = false;
-					// Choose char mode
-					while(true)
-					{
-						std::cout << "How it should be rendered([B]lock(default), [A]scii, black and [W]hite): ";
-						std::cin.getline(input, 2, '\n');
-
-						switch(input[0])
-						{
-							case 'b':
-							case 'B':
-							case '\0':
-							case ' ':
-								chrMode = BLOCK;
-								break;
-							case 'a':
-							case 'A':
-								chrMode = ASCII;
-								break;
-							case 'w':
-							case 'W':
-								chrMode = GREYSCALE;
-								break;
-							default:
-								continue;
-						}
-
-						break;
-					}
+					colorMode = COLOR;
+					break;
+				case 'g':
+				case 'G':
+					colorMode = GRAYSCALE;
+					break;
+				case 't':
+				case 'T':
+					colorMode = TRUE_COLOR;
 					break;
 				default:
 					continue;
 			}
 			
+			break;
+		}
+
+		while(true)
+		{
+			std::cout << "How it should be rendered([B]lock(default), [A]scii): ";
+			std::cin.getline(input, 2, '\n');
+
+			switch(input[0])
+			{
+				case 'b':
+				case 'B':
+				case '\0':
+				case ' ':
+					chrMode = BLOCK;
+					break;
+				case 'a':
+				case 'A':
+					chrMode = ASCII;
+					break;
+				default:
+					continue;
+			}
+
 			break;
 		}
 	}
@@ -194,8 +199,8 @@ int main(int argc, char *argv[])
 	#pragma endregion
 	
 	// Since they are unicode, they need to be stored as pointer arrays
-	std::vector<const char *> blockChars = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
-	std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+	void (*transformer)(cv::uint8_t, cv::Vec3b, std::string &);
+
 	std::vector<const char *> greyscaleChars =
 	{
 		"\x1b[48;5;232m ", "\x1b[48;5;234m ", "\x1b[48;5;236m ",
@@ -204,33 +209,50 @@ int main(int argc, char *argv[])
 		"\x1b[48;5;250m ", "\x1b[48;5;252m ", "\x1b[48;5;254m "
 	};
 
-	std::vector<const char *> *charsPtr;
-	
+	// buffer += chars[static_cast<int>(std::floor(chars.size() * value / 256.))];
+
 	switch(chrMode)
 	{
 		case BLOCK:
-			charsPtr = &blockChars;
+			if(colorMode == TRUE_COLOR) transformer = [](cv::uint8_t, cv::Vec3b value, std::string &buffer) {
+				buffer += fmt::format("\x1b[48;2;{};{};{}m ", value[2], value[1], value[0]);
+			};
+			else if(colorMode == COLOR) transformer = [](cv::uint8_t, cv::Vec3b value, std::string &buffer) {
+				buffer += fmt::format("\x1b[48;5;{}m ", 16 + value[0]/42 + value[1]/42*6 + value[2]/42*36);
+			};
+			else transformer = [](cv::uint8_t value, cv::Vec3b, std::string &buffer) {
+				const std::vector<const char *> blockChars = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
+
+				buffer += sample_array(value, blockChars);
+			};
 			break;
 		case ASCII:
-			charsPtr = &asciiChars;
-			break;
-		case GREYSCALE:
-			charsPtr = &greyscaleChars;
-			break;
-		default:
-			std::cout << "Undefined color mode choosen\n";
-			return -1;
-	}
+			if(colorMode == TRUE_COLOR) transformer = [](cv::uint8_t g, cv::Vec3b value, std::string &buffer) {
+				const std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
 
-	std::vector<const char *> &chars = *charsPtr;
-	
-	double updateDelay = static_cast<double>(Date::Unit::US) * 1000. / cap.get(cv::CAP_PROP_FPS);
-	
-	// Clear console
-	std::cout << "\x1b[2J";
+				// Boost color to max brightness to counteract character size = dimming
+				uint8_t maxValue = std::max(value[0], std::max(value[1], value[2]));
+				float diff = 255.0 / maxValue;
+				value[0] *= diff;
+				value[1] *= diff;
+				value[2] *= diff;
+
+				buffer += fmt::format("\x1b[38;2;{};{};{}m{}", value[2], value[1], value[0], sample_array(g, asciiChars));
+			};
+			else if(colorMode == COLOR) transformer = [](cv::uint8_t g, cv::Vec3b value, std::string &buffer) {
+				const std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+
+				buffer += fmt::format("\x1b[38;5;{}m{}", 16 + value[0]/42 + value[1]/42*6 + value[2]/42*36, sample_array(g, asciiChars));
+			};
+			else transformer = [](cv::uint8_t value, cv::Vec3b, std::string &buffer) {
+				const std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+
+				buffer += sample_array(value, asciiChars);
+			};
+			break;
+	}
 	
 	// Start music
-	
 	std::future<void> playMusic(std::async(std::launch::async,
 		[videoPath]()
 		{
@@ -239,48 +261,47 @@ int main(int argc, char *argv[])
 		}
 	));
 	
-	auto startTime = Date::now(Date::Unit::US);
+	auto updateDelay = 1000000us*1000 / static_cast<long>(1000 * cap.get(cv::CAP_PROP_FPS));
+	auto startTime = now<std::chrono::microseconds>();
+	// Clear console
+	std::cout << "\x1b[2J";
 	
 	std::setvbuf(stdout, nullptr, _IOFBF, BUFSIZ); // Set stdout to be fully buffered
-	
+
+	std::string buffer;
 	while(true)
 	{
-		long elapsedTime = ( Date::now(Date::Unit::US) - startTime );
+		auto elapsedTime = ( now<std::chrono::microseconds>() - startTime );
 		int index = elapsedTime / updateDelay;
-		
+
 		for(int k = 1; k < index; k++)
 		{
 			if(k >= index-1)
 			{
-				cv::Mat frame;
+				cv::Mat frame, grayFrame;
 
 				if(!cap.read(frame)) goto endLoop;
 
 				cv::resize(frame, frame, cv::Size(width, height), 0., 0., cv::INTER_AREA);
 				
-				if(!useColor) cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
+				grayFrame = frame.clone();
+				cv::cvtColor(grayFrame, grayFrame, cv::COLOR_BGR2GRAY);
 				
 				fmt::print("\x1b[1;1H");
 				
 				for(int j = 0; j < frame.rows; j++)
 				{
+					buffer.clear();
 					for(int i = 0; i < frame.cols; i++)
 					{
-						if(!useColor)
-						{
-							uint8_t value = frame.at<uint8_t>(j, i);
+						uint8_t gray = grayFrame.at<uint8_t>(j, i);
+						cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
 
-							fmt::print("{}", chars[static_cast<int>(std::floor(chars.size() * value / 256.))]);
-						}
-						else
-						{							
-							cv::Vec3b value = frame.at<cv::Vec3b>(j, i);
-							
-							fmt::print("\x1b[48;2;{};{};{}m ", value[2], value[1], value[0]);
-						}
+						transformer(gray, value, buffer);
 					}
-					
-					putc('\n', stdout);
+
+					buffer += '\n';
+					fmt::print("{}", buffer);
 				}
 				
 				fmt::print("\x1b[0m");
@@ -290,7 +311,7 @@ int main(int argc, char *argv[])
 			{
 				if(!cap.grab()) goto endLoop;
 			}
-			
+
 			startTime += updateDelay;
 		}
 	}
@@ -298,8 +319,6 @@ int main(int argc, char *argv[])
 endLoop:
 	
 	cap.release();
-	
-	std::cout << "\x1b[0m\x1b[1000B\x1b[1G";
 	
 	playMusic.get();
 	

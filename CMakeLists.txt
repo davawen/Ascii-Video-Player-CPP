@@ -13,13 +13,14 @@ set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(AsciiVideoPlayer VERSION 1.2 LANGUAGES CXX)
-add_executable(AsciiVideoPlayer ./src/main.cpp)
+add_executable(AsciiVideoPlayer ${CMAKE_SOURCE_DIR}/src/main.cpp)
 
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
 find_package(fmt REQUIRED)
 
 # Headers
+target_include_directories(AsciiVideoPlayer PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(AsciiVideoPlayer PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 # Libraries
