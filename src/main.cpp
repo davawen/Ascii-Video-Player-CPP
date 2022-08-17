@@ -23,6 +23,8 @@
 #include <unistd.h>
 #endif
 
+#include "flags.hpp"
+
 namespace fs = std::filesystem;
 
 using namespace std::chrono_literals;
@@ -48,14 +50,22 @@ inline const T &sample_array(cv::uint8_t v, const std::vector<T> &vector) {
 
 int main(int argc, char *argv[])
 {
-	if(argc != 2)
+	// Get input, such as video path, color mode wanted etc...
+	std::string videoPath;
+
+	auto flags = FlagMod::Flags(argc, argv);
+
+	try {
+		auto [file] = flags.parse(
+			flags.positional<std::string>("File")
+		);
+		videoPath = file;
+	}
+	catch(std::exception &e)
 	{
 		std::cout << "Usage: AsciiVideoPlayer file\n";
 		return -1;
 	}
-
-	// Get input, such as video path, color mode wanted etc...
-	std::string videoPath = std::string(argv[1]);
 
 	if(!fs::exists(videoPath) || fs::is_directory(videoPath))
 	{
@@ -228,7 +238,7 @@ int main(int argc, char *argv[])
 			break;
 		case ASCII:
 			if(colorMode == TRUE_COLOR) transformer = [](cv::uint8_t g, cv::Vec3b value, std::string &buffer) {
-				const std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+				const std::vector<char> asciiChars = { ' ', '.', '\"', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };
 
 				// Boost color to max brightness to counteract character size = dimming
 				uint8_t maxValue = std::max(value[0], std::max(value[1], value[2]));
@@ -240,12 +250,12 @@ int main(int argc, char *argv[])
 				buffer += fmt::format("\x1b[38;2;{};{};{}m{}", value[2], value[1], value[0], sample_array(g, asciiChars));
 			};
 			else if(colorMode == COLOR) transformer = [](cv::uint8_t g, cv::Vec3b value, std::string &buffer) {
-				const std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+				const std::vector<char> asciiChars = { ' ', '.', '\"', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };
 
 				buffer += fmt::format("\x1b[38;5;{}m{}", 16 + value[0]/42 + value[1]/42*6 + value[2]/42*36, sample_array(g, asciiChars));
 			};
 			else transformer = [](cv::uint8_t value, cv::Vec3b, std::string &buffer) {
-				const std::vector<const char *> asciiChars = { " ", ".", "\"", ",", ":", "-", "~", "=", "|", "(", "{", "[", "&", "#", "@" };
+				const std::vector<char> asciiChars = { ' ', '.', '\"', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };
 
 				buffer += sample_array(value, asciiChars);
 			};
