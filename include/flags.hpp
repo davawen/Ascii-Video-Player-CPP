@@ -4,11 +4,12 @@
 #include <string>
 #include <cstring>
 #include <vector>
-#include <array>
 #include <optional>
 #include <tuple>
+#include <algorithm>
 #include <functional>
 #include <numeric>
+#include <ranges>
 
 #include "fmt/core.h"
 
@@ -249,12 +250,7 @@ public:
 	}
 
 	void print_help(FILE *output = stdout) {
-		// std::string positionals;
-		// for(auto &flag : help) {
-		// 	if(PositionalHelp *p = std::get_if<PositionalHelp>(&flag)) {
-		// 		positionals += fmt::format("{{{}}}", p->label);
-		// 	}
-		// }
+		namespace ranges = std::ranges;
 		
 		fmt::print(output, "{} version {}\n\n", name_, version_);
 
@@ -264,21 +260,41 @@ public:
 			}
 		));
 
-		size_t max_length = 0;
-		std::vector<std::pair<std::string, const SwitchHelp *>> flags;
-		std::transform(switch_help.cbegin(), switch_help.cend(), std::back_inserter(flags),
-			[&max_length](const SwitchHelp &s) {
-				auto str = fmt::format("    {} --{}", s.short_name.has_value() ? fmt::format("-{},", *s.short_name) : "   ", s.name);
-				max_length = std::max(max_length, str.length());
-				return std::pair{ str, &s };
-			}
-		);
+		if(switch_help.size() > 0) {
+			size_t max_length = 0;
+			std::vector<std::pair<std::string, const SwitchHelp *>> switches;
+			ranges::transform(switch_help, std::back_inserter(switches),
+				[&max_length](const SwitchHelp &s) {
+					auto str = fmt::format("    {} --{}", s.short_name.has_value() ? fmt::format("-{},", *s.short_name) : "   ", s.name);
+					max_length = std::max(max_length, str.length());
+					return std::pair{ str, &s };
+				}
+			);
 
-		fmt::print(output, "FLAGS:{}\n", std::accumulate(flags.cbegin(), flags.cend(), std::string("\n"), 
-			[max_length](std::string a, const std::pair<const std::string, const SwitchHelp *> &b) {
-				return std::move(a) + std::move(b.first) + fmt::format("{}    {}\n", std::string(max_length - b.first.length(), ' '), b.second->help);
-			}
-		));
+			fmt::print(output, "FLAGS:{}\n", std::accumulate(switches.cbegin(), switches.cend(), std::string("\n"), 
+				[max_length](std::string a, const std::pair<const std::string, const SwitchHelp *> &b) {
+					return std::move(a) + std::move(b.first) + fmt::format("{}    {}\n", std::string(max_length - b.first.length(), ' '), b.second->help);
+				}
+			));
+		}
+
+		if(flag_help.size() > 0){
+			size_t max_length = 0;
+			std::vector<std::pair<std::string, const FlagHelp *>> flags;
+			ranges::transform(flag_help, std::back_inserter(flags), 
+				[&max_length](const FlagHelp &f) {
+					auto str = fmt::format("	{} --{}", f.short_name.has_value() ? fmt::format("-{},", *f.short_name) : "	", f.name);
+					max_length = std::max(max_length, str.length());
+					return std::pair{ str, &f };
+				}
+			);
+
+			fmt::print(output, "OPTIONS:{}\n", std::accumulate(flags.cbegin(), flags.cend(), std::string("\n"), 
+				[max_length](std::string a, const std::pair<const std::string, const FlagHelp *> &b) {
+					return std::move(a) + std::move(b.first) + fmt::format("{}	{}\n", std::string(max_length - b.first.length(), ' '), b.second->help);
+				}
+			));
+		}
 	}
 
 	Flags &name(const std::string &name) {

@@ -58,12 +58,20 @@ int main(int argc, char *argv[])
 		.version("1.3.0");
 
 	try {
-		auto [c, b, file] = flags.parse(
-			flags.add_switch("color", 'c', "Wether to enable color or not"),
-			flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness"),
-			flags.positional<std::string>("file")
-		);
+		auto flag_help = flags.add_switch("help", 'h', "Show this help and exit.");
+		auto flag_bright = flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness");
+		// auto flag_color = flags.flag<int>("color", 'c', "Number of colors to use (int)");
+		auto flag_file = flags.positional<std::string>("file");
+
+		auto [help] = flags.parse(flag_help);
+		if(help) {
+			flags.print_help();
+			return -1;
+		}
+
+		auto [b, file] = flags.parse(flag_bright, flag_file);
 		videoPath = file;
+
 	}
 	catch(std::exception &e)
 	{
