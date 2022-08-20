@@ -53,17 +53,21 @@ int main(int argc, char *argv[])
 	// Get input, such as video path, color mode wanted etc...
 	std::string videoPath;
 
-	auto flags = FlagMod::Flags(argc, argv);
+	auto flags = FlagMod::Flags(argc, argv)
+		.name("AsciiVideoPlayer")
+		.version("1.3.0");
 
 	try {
-		auto [file] = flags.parse(
-			flags.positional<std::string>("File")
+		auto [c, b, file] = flags.parse(
+			flags.add_switch("color", 'c', "Wether to enable color or not"),
+			flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness"),
+			flags.positional<std::string>("file")
 		);
 		videoPath = file;
 	}
 	catch(std::exception &e)
 	{
-		std::cout << "Usage: AsciiVideoPlayer file\n";
+		flags.print_help();
 		return -1;
 	}
 

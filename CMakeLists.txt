@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(AsciiVideoPlayer VERSION 1.2 LANGUAGES CXX)
+project(AsciiVideoPlayer VERSION 1.3 LANGUAGES CXX)
 add_executable(AsciiVideoPlayer ${CMAKE_SOURCE_DIR}/src/main.cpp)
 
 find_package(OpenCV REQUIRED)

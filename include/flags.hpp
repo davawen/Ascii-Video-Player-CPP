@@ -8,6 +8,7 @@
 #include <optional>
 #include <tuple>
 #include <functional>
+#include <numeric>
 
 #include "fmt/core.h"
 
@@ -49,7 +50,6 @@ struct Flag {
 
 	std::string name;
 	std::optional<char> short_name;
-	std::string help;
 
 	std::optional<T> default_value;
 	std::optional<std::string> value;
@@ -58,7 +58,6 @@ struct Flag {
 struct Switch {
 	std::string name;
 	std::optional<char> short_name;
-	std::string help;
 
 	bool value;
 };
@@ -176,12 +175,34 @@ class Flags {
 		throw RequiredFlagNotGivenError(p.label);
 	}
 
+	struct FlagHelp {
+		std::string name;
+		std::optional<char> short_name;
+		std::string help;
+	};
+
+	struct SwitchHelp {
+		std::string name;
+		std::optional<char> short_name;
+		std::string help;
+	};
+
+	struct PositionalHelp {
+		std::string label;
+	};
+
+	std::string name_, version_, executable_;
+	std::vector<FlagHelp> flag_help;
+	std::vector<SwitchHelp> switch_help;
+	std::vector<PositionalHelp> positional_help;
 
 public:
 	Flags(int argc, char **argv) {
 		for(int i = 1; i < argc; i++) {
 			args.push_back(argv[i]);
 		}
+
+		executable_ = argv[0];
 	}
 
 	/// Takes a parameter pack of FlagMod::Flag, FlagMod::Switch and FlagMod::Positional
@@ -227,35 +248,84 @@ public:
 		}
 	}
 
+	void print_help(FILE *output = stdout) {
+		// std::string positionals;
+		// for(auto &flag : help) {
+		// 	if(PositionalHelp *p = std::get_if<PositionalHelp>(&flag)) {
+		// 		positionals += fmt::format("{{{}}}", p->label);
+		// 	}
+		// }
+		
+		fmt::print(output, "{} version {}\n\n", name_, version_);
+
+		fmt::print(output, "Usage: {} [options...]{}\n\n", executable_, std::accumulate(positional_help.begin(), positional_help.end(), std::string(""), 
+			[](std::string a, PositionalHelp &b) {
+				return std::move(a) + fmt::format(" {{{}}}", b.label);
+			}
+		));
+
+		size_t max_length = 0;
+		std::vector<std::pair<std::string, const SwitchHelp *>> flags;
+		std::transform(switch_help.cbegin(), switch_help.cend(), std::back_inserter(flags),
+			[&max_length](const SwitchHelp &s) {
+				auto str = fmt::format("    {} --{}", s.short_name.has_value() ? fmt::format("-{},", *s.short_name) : "   ", s.name);
+				max_length = std::max(max_length, str.length());
+				return std::pair{ str, &s };
+			}
+		);
+
+		fmt::print(output, "FLAGS:{}\n", std::accumulate(flags.cbegin(), flags.cend(), std::string("\n"), 
+			[max_length](std::string a, const std::pair<const std::string, const SwitchHelp *> &b) {
+				return std::move(a) + std::move(b.first) + fmt::format("{}    {}\n", std::string(max_length - b.first.length(), ' '), b.second->help);
+			}
+		));
+	}
+
+	Flags &name(const std::string &name) {
+		name_ = name;
+		return *this;
+	}
+
+	Flags &version(const std::string &version) {
+		version_ = version;
+		return *this;
+	}
+
 	template <typename T>
 	Flag<T, false> flag(const std::string &name, const std::string &help) {
-		return Flag<T, false> { name, nullopt, help, nullopt, nullopt };
+		flag_help.push_back(FlagHelp { name, nullopt, help });
+		return Flag<T, false> { name, nullopt, nullopt, nullopt };
 	}
 	template <typename T>
 	Flag<T, false> flag(const std::string &name, char short_name, const std::string &help) {
-		return Flag<T, false> { name, short_name, help, nullopt, nullopt };
+		flag_help.push_back(FlagHelp { name, short_name, help });
+		return Flag<T, false> { name, short_name, nullopt, nullopt };
 	}
 	template <typename T>
 	Flag<T, true> flag_required(const std::string &name, const std::string &help, const std::optional<T> default_value = nullopt) {
-		return Flag<T, true> { name, nullopt, help, default_value, nullopt };
+		flag_help.push_back(FlagHelp { name, nullopt, help });
+		return Flag<T, true> { name, nullopt, default_value, nullopt };
 	}
 	template <typename T>
 	Flag<T, true> flag_required(const std::string &name, char short_name, const std::string &help, const std::optional<T> default_value = nullopt) {
-		return Flag<T, true> { name, short_name, help, default_value, nullopt };
+		flag_help.push_back(FlagHelp { name, short_name, help });
+		return Flag<T, true> { name, short_name, default_value, nullopt };
 	}
 
 	Switch add_switch(const std::string &name, const std::string &help) {
-		return Switch { name, nullopt, help, false };
+		switch_help.push_back(SwitchHelp { name, nullopt, help });
+		return Switch { name, nullopt, false };
 	}
 	Switch add_switch(const std::string &name, char short_name, const std::string &help) {
-		return Switch { name, short_name, help, false };
+		switch_help.push_back(SwitchHelp { name, short_name, help });
+		return Switch { name, short_name, false };
 	}
 
 	template <typename T>
 	Positional<T> positional(const std::string &label) {
+		positional_help.push_back(PositionalHelp{ label });
 		return Positional<T>{ label, nullopt };
 	}
 };
-
 
 }
