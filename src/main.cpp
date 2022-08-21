@@ -23,7 +23,7 @@
 #include <unistd.h>
 #endif
 
-#include "flags.hpp"
+#include "flagmod/flags.hpp"
 
 namespace fs = std::filesystem;
 
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 
 	auto flag_help = flags.add_switch("help", 'h', "Show this help and exit.");
 	auto flag_bright = flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness");
-	auto flag_color = flags.flag_required<int>("color", 'c', "Number of colors to use (int)");
+	auto flag_color = flags.flag_required<int>("color", 'c', "Number of colors to use (int)", 256);
 	auto flag_file = flags.positional<std::string>("file");
 
 	auto [help] = flags.parse(flag_help);
@@ -265,11 +265,11 @@ int main(int argc, char *argv[])
 	
 	// Start music
 	std::future<void> playMusic(std::async(std::launch::async,
-		[videoPath]()
+		[](const std::string &videoPath)
 		{
 			std::string cmd = fmt::format("mplayer -vo null -slave \"{}\" {}", videoPath, "> /dev/null");
 			system(cmd.c_str());
-		}
+		}, videoPath
 	));
 	
 	auto updateDelay = 1000000us*1000 / static_cast<long>(1000 * cap.get(cv::CAP_PROP_FPS));
