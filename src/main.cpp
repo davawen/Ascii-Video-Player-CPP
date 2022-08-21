@@ -51,33 +51,22 @@ inline const T &sample_array(cv::uint8_t v, const std::vector<T> &vector) {
 int main(int argc, char *argv[])
 {
 	// Get input, such as video path, color mode wanted etc...
-	std::string videoPath;
-
 	auto flags = FlagMod::Flags(argc, argv)
 		.name("AsciiVideoPlayer")
 		.version("1.3.0");
 
-	try {
-		auto flag_help = flags.add_switch("help", 'h', "Show this help and exit.");
-		auto flag_bright = flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness");
-		// auto flag_color = flags.flag<int>("color", 'c', "Number of colors to use (int)");
-		auto flag_file = flags.positional<std::string>("file");
+	auto flag_help = flags.add_switch("help", 'h', "Show this help and exit.");
+	auto flag_bright = flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness");
+	auto flag_color = flags.flag_required<int>("color", 'c', "Number of colors to use (int)");
+	auto flag_file = flags.positional<std::string>("file");
 
-		auto [help] = flags.parse(flag_help);
-		if(help) {
-			flags.print_help();
-			return -1;
-		}
-
-		auto [b, file] = flags.parse(flag_bright, flag_file);
-		videoPath = file;
-
-	}
-	catch(std::exception &e)
-	{
+	auto [help] = flags.parse(flag_help);
+	if(help) {
 		flags.print_help();
 		return -1;
 	}
+
+	auto [b, c, videoPath] = flags.parse(flag_bright, flag_color, flag_file);
 
 	if(!fs::exists(videoPath) || fs::is_directory(videoPath))
 	{

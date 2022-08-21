@@ -2,12 +2,10 @@
 
 #include <iostream>
 #include <string>
-#include <cstring>
 #include <vector>
 #include <optional>
 #include <tuple>
 #include <algorithm>
-#include <functional>
 #include <numeric>
 #include <ranges>
 
@@ -33,15 +31,15 @@ namespace FlagMod {
 
 	}
 struct RequiredFlagNotGivenError : std::exception {
-	std::string name;
+	std::string msg;
 
-	RequiredFlagNotGivenError(std::string name) : name(name) {}
+	RequiredFlagNotGivenError(std::string msg) : msg(msg) {}
 };
 
 struct InvalidFlagInput : std::exception {
-	std::string name, input;
+	std::string msg;
 
-	InvalidFlagInput(std::string name, std::string input) : name(name), input(input) {}
+	InvalidFlagInput(std::string msg) : msg(msg) {}
 };
 	
 template <typename T, bool Required>
@@ -72,6 +70,27 @@ struct Positional {
 
 class Flags {
 	std::vector<std::string> args;
+
+	struct FlagHelp {
+		std::string name;
+		std::optional<char> short_name;
+		std::string help;
+	};
+
+	struct SwitchHelp {
+		std::string name;
+		std::optional<char> short_name;
+		std::string help;
+	};
+
+	struct PositionalHelp {
+		std::string label;
+	};
+
+	std::string name_, version_, executable_;
+	std::vector<FlagHelp> flag_help;
+	std::vector<SwitchHelp> switch_help;
+	std::vector<PositionalHelp> positional_help;
 
 	/// Base case for `flag_present`
 	std::pair<std::nullptr_t, size_t> flag_present(const std::string &) {
@@ -146,16 +165,31 @@ class Flags {
 		return s.value;
 	}
 
+	std::string format_flag_help(const std::string &name) {
+		namespace ranges = std::ranges;
+
+		auto matching = [&name](auto &x){ return x.name == name; };
+		if(auto it = ranges::find_if(flag_help, matching); it != flag_help.end()) {
+			FlagHelp &f = *it;
+			return fmt::format("    {} --{}    {}\n", f.short_name.has_value() ? fmt::format("-{},", *f.short_name) : "   ", f.name, f.help);
+		}
+		else if(auto it = ranges::find_if(switch_help, matching); it != switch_help.end()) {
+			SwitchHelp &s = *it;
+			return fmt::format("    {} --{}    {}\n", s.short_name.has_value() ? fmt::format("-{},", *s.short_name) : "   ", s.name, s.help);
+		}
+		return "";
+	}
+
 	/// @returns T if the flag is required or optional<T> if it isn't
 	template <typename T, bool R>
 	typename Flag<T, R>::out parse_flag(const Flag<T, R> &flag) {
 		if constexpr(R) {
-			if(!flag.value.has_value() && !flag.default_value.has_value()) throw RequiredFlagNotGivenError(flag.name);
+			if(!flag.value.has_value() && !flag.default_value.has_value()) throw RequiredFlagNotGivenError(fmt::format("option --{} requires a value but wasn't given one\n{}\n", flag.name, format_flag_help(flag.name)));
 			else if(flag.default_value.has_value()) return *flag.default_value;
 			else {
 				std::optional<T> value = detail::str_to_value<T>(*flag.value);
 				if(value.has_value()) return *value;
-				else throw InvalidFlagInput(flag.name, *flag.value);
+				else throw InvalidFlagInput(fmt::format("couldn't parse input of --{}, was given {}\n{}\n", flag.name, *flag.value, format_flag_help(flag.name))); // Show invalid input instead of failing silently
 			}
 		}
 		else {
@@ -163,7 +197,7 @@ class Flags {
 			else {
 				std::optional<T> value = detail::str_to_value<T>(*flag.value);
 				if(value.has_value()) return *value;
-				else throw InvalidFlagInput(flag.name, *flag.value); // Show invalid input instead of failing silently
+				else throw InvalidFlagInput(fmt::format("couldn't parse input of --{}, was given {}\n{}\n", flag.name, *flag.value, format_flag_help(flag.name))); 
 			}
 		}
 	}
@@ -173,29 +207,16 @@ class Flags {
 		std::optional<T> value;
 		if(p.value.has_value() && (value = detail::str_to_value<T>(*p.value)).has_value()) return *value;
 
-		throw RequiredFlagNotGivenError(p.label);
+		throw RequiredFlagNotGivenError(fmt::format("argument {{{}}} not given", p.label));
 	}
 
-	struct FlagHelp {
-		std::string name;
-		std::optional<char> short_name;
-		std::string help;
-	};
-
-	struct SwitchHelp {
-		std::string name;
-		std::optional<char> short_name;
-		std::string help;
-	};
-
-	struct PositionalHelp {
-		std::string label;
-	};
-
-	std::string name_, version_, executable_;
-	std::vector<FlagHelp> flag_help;
-	std::vector<SwitchHelp> switch_help;
-	std::vector<PositionalHelp> positional_help;
+	void print_usage(FILE *output) {
+		fmt::print(output, "Usage: {} [options...]{}\n\n", executable_, std::accumulate(positional_help.begin(), positional_help.end(), std::string(""), 
+			[](std::string a, PositionalHelp &b) {
+				return std::move(a) + fmt::format(" {{{}}}", b.label);
+			}
+		));
+	}
 
 public:
 	Flags(int argc, char **argv) {
@@ -237,12 +258,14 @@ public:
 			return std::tuple{ parse_flag(flags)... };
 		}
 		catch(RequiredFlagNotGivenError &e) {
-			fmt::print(stderr, "error: required flag {} wasn't given\n", e.name);
+			print_usage(stderr);
+			fmt::print(stderr, "\x1b[1;31m\x1b[4merror:\x1b[0m {}\n", e.msg);
 			// TODO: print help
 			throw e;
 		}
 		catch(InvalidFlagInput &e) {
-			fmt::print(stderr, "error: couldn't parse input of flag {} ({})\n", e.name, e.input);
+			print_usage(stderr);
+			fmt::print(stderr, "\x1b[1;31m\x1b[4merror:\x1b[0m {}\n", e.msg);
 		}
 		catch(std::exception &e) {
 			throw e;
@@ -253,12 +276,8 @@ public:
 		namespace ranges = std::ranges;
 		
 		fmt::print(output, "{} version {}\n\n", name_, version_);
-
-		fmt::print(output, "Usage: {} [options...]{}\n\n", executable_, std::accumulate(positional_help.begin(), positional_help.end(), std::string(""), 
-			[](std::string a, PositionalHelp &b) {
-				return std::move(a) + fmt::format(" {{{}}}", b.label);
-			}
-		));
+		
+		print_usage(output);
 
 		if(switch_help.size() > 0) {
 			size_t max_length = 0;
@@ -283,7 +302,7 @@ public:
 			std::vector<std::pair<std::string, const FlagHelp *>> flags;
 			ranges::transform(flag_help, std::back_inserter(flags), 
 				[&max_length](const FlagHelp &f) {
-					auto str = fmt::format("	{} --{}", f.short_name.has_value() ? fmt::format("-{},", *f.short_name) : "	", f.name);
+					auto str = fmt::format("    {} --{}", f.short_name.has_value() ? fmt::format("-{},", *f.short_name) : "    ", f.name);
 					max_length = std::max(max_length, str.length());
 					return std::pair{ str, &f };
 				}
@@ -291,7 +310,7 @@ public:
 
 			fmt::print(output, "OPTIONS:{}\n", std::accumulate(flags.cbegin(), flags.cend(), std::string("\n"), 
 				[max_length](std::string a, const std::pair<const std::string, const FlagHelp *> &b) {
-					return std::move(a) + std::move(b.first) + fmt::format("{}	{}\n", std::string(max_length - b.first.length(), ' '), b.second->help);
+					return std::move(a) + std::move(b.first) + fmt::format("{}    {}\n", std::string(max_length - b.first.length(), ' '), b.second->help);
 				}
 			));
 		}
