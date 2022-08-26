@@ -56,8 +56,6 @@ int main(int argc, char *argv[])
 		.version("1.3.0");
 
 	auto flag_help = flags.add_switch("help", 'h', "Show this help and exit.");
-	auto flag_bright = flags.add_switch("bright", "Wether to recalibrate colored characters to max brightness");
-	auto flag_color = flags.flag_required<int>("color", 'c', "Number of colors to use (int)", 256);
 	auto flag_file = flags.positional<std::string>("file");
 
 	auto [help] = flags.parse(flag_help);
@@ -66,7 +64,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	auto [b, c, videoPath] = flags.parse(flag_bright, flag_color, flag_file);
+	auto [videoPath] = flags.parse(flag_file);
 
 	if(!fs::exists(videoPath) || fs::is_directory(videoPath))
 	{
@@ -229,7 +227,7 @@ int main(int argc, char *argv[])
 				buffer += fmt::format("\x1b[48;2;{};{};{}m ", value[2], value[1], value[0]);
 			};
 			else if(colorMode == COLOR) transformer = [](cv::uint8_t, cv::Vec3b value, std::string &buffer) {
-				buffer += fmt::format("\x1b[48;5;{}m ", 16 + value[0]/42 + value[1]/42*6 + value[2]/42*36);
+				buffer += fmt::format("\x1b[48;5;{}m ", 16 + value[0]/43 + value[1]/43*6 + value[2]/43*36);
 			};
 			else transformer = [](cv::uint8_t value, cv::Vec3b, std::string &buffer) {
 				const std::vector<const char *> blockChars = { " ", "\u2591", "\u2592", "\u2593", "\u2589" };
@@ -253,7 +251,7 @@ int main(int argc, char *argv[])
 			else if(colorMode == COLOR) transformer = [](cv::uint8_t g, cv::Vec3b value, std::string &buffer) {
 				const std::vector<char> asciiChars = { ' ', '.', '\"', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };
 
-				buffer += fmt::format("\x1b[38;5;{}m{}", 16 + value[0]/42 + value[1]/42*6 + value[2]/42*36, sample_array(g, asciiChars));
+				buffer += fmt::format("\x1b[38;5;{}m{}", 16 + value[0]/43 + value[1]/43*6 + value[2]/43*36, sample_array(g, asciiChars));
 			};
 			else transformer = [](cv::uint8_t value, cv::Vec3b, std::string &buffer) {
 				const std::vector<char> asciiChars = { ' ', '.', '\"', ',', ':', '-', '~', '=', '|', '(', '{', '[', '&', '#', '@' };

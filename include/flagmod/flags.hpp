@@ -27,7 +27,7 @@ struct Flag {
 	std::optional<char> short_name;
 
 	std::optional<T> default_value;
-	std::optional<std::string> value;
+	std::optional<std::string_view> value;
 };
 
 struct Switch {
@@ -41,7 +41,7 @@ template <typename T>
 struct Positional {
 	std::string label;
 	
-	std::optional<std::string> value;
+	std::optional<std::string_view> value;
 };
 
 class Flags {
@@ -49,19 +49,19 @@ class Flags {
 	Help help;
 
 	/// Base case for `flag_present`
-	std::pair<std::nullptr_t, size_t> flag_present(const std::string &) {
+	std::pair<std::nullptr_t, size_t> flag_present(std::string_view) {
 		return { nullptr, 0 };
 	}
 
 	/// Ignore non-flag arguments
 	template <typename T, typename ... Ts>
-	auto flag_present(const std::string &str, T &, Ts & ... flags) {
+	auto flag_present(std::string_view str, T &, Ts & ... flags) {
 		return flag_present(str, flags...);
 	}
 
 	/// @returns { nullptr, _ } if flag isn't detected, else returns a pointer to the found flag's string value and the position of the character right after the flag in the string
 	template <typename T, bool R, typename ... Ts>
-	std::pair<std::optional<std::string> *, size_t> flag_present(const std::string &str, Flag<T, R> &flag, Ts & ... flags) {
+	std::pair<std::optional<std::string_view> *, size_t> flag_present(std::string_view str, Flag<T, R> &flag, Ts & ... flags) {
 		if(str.starts_with("--" + flag.name)) {
 			return { &flag.value, flag.name.size() + 2 };
 		}
@@ -74,20 +74,20 @@ class Flags {
 	}
 
 	/// Base case for `switch_present`
-	bool switch_present(const std::string &) {
+	bool switch_present(std::string_view) {
 		return false;
 	}
 
 	/// Ignore non-switch arguments
 	template <typename T, typename ... Ts>
-	bool switch_present(const std::string &str, T &, Ts & ... flags) {
+	bool switch_present(std::string_view str, T &, Ts & ... flags) {
 		return switch_present(str, flags...);
 	}
 
 	/// Turns on switches present in the given string
 	/// @return wether at least one switch was present
 	template <typename ... Ts>
-	bool switch_present(const std::string &str, Switch &s, Ts & ... flags) {
+	bool switch_present(std::string_view str, Switch &s, Ts & ... flags) {
 		if(
 			str.starts_with("--" + s.name) ||
 			(s.short_name.has_value() && str.starts_with('-') && str.find(*s.short_name) != std::string::npos)
@@ -100,15 +100,16 @@ class Flags {
 		}
 	}
 
-	void set_positional(const std::string &) {}
+	/// Base case for `set_positional`
+	void set_positional(std::string_view) {}
 
 	template <typename T, typename ... Ts>
-	void set_positional(const std::string &str, T &, Ts & ... flags) {
+	void set_positional(std::string_view str, T &, Ts & ... flags) {
 		return set_positional(str, flags...);
 	}
 
 	template <typename T, typename ... Ts>
-	void set_positional(const std::string &str, Positional<T> &positional, Ts & ... flags) {
+	void set_positional(std::string_view str, Positional<T> &positional, Ts & ... flags) {
 		if(!positional.value.has_value()) {
 			positional.value = str;
 		}
@@ -125,21 +126,19 @@ class Flags {
 	template <typename T, bool R>
 	typename Flag<T, R>::out parse_flag(const Flag<T, R> &flag) {
 		if constexpr(R) {
-			if(!flag.value.has_value() && !flag.default_value.has_value()) throw RequiredFlagNotGivenError(fmt::format("option --{} requires a value but wasn't given one\n{}\n", flag.name, help.format_flag_help(flag.name)));
+			if(!flag.value.has_value() && !flag.default_value.has_value()) throw RequiredFlagNotGiven(fmt::format("option --{} requires a value but wasn't given one\n{}\n", flag.name, help.format_flag_help(flag.name)));
 			else if(flag.default_value.has_value()) return *flag.default_value;
-			else {
-				std::optional<T> value = str_to_value<T>(*flag.value);
-				if(value.has_value()) return *value;
-				else throw InvalidFlagInput(fmt::format("couldn't parse input of --{}, was given {}\n{}\n", flag.name, *flag.value, help.format_flag_help(flag.name))); // Show invalid input instead of failing silently
-			}
+			// fallthrough on else
 		}
 		else {
 			if(!flag.value.has_value()) return nullopt;
-			else {
-				std::optional<T> value = str_to_value<T>(*flag.value);
-				if(value.has_value()) return *value;
-				else throw InvalidFlagInput(fmt::format("couldn't parse input of --{}, was given {}\n{}\n", flag.name, *flag.value, help.format_flag_help(flag.name))); 
-			}
+			// fallthrough on else
+		}
+		try {
+			return str_to_value<T>(*flag.value);
+		} 
+		catch(InvalidArgument &e) {
+			throw InvalidArgument(fmt::format("{}\ncouldn't parse input of --{}, was given {}\n{}\n", e.msg, flag.name, *flag.value, help.format_flag_help(flag.name))); // Show invalid input instead of failing silently
 		}
 	}
 
@@ -148,7 +147,7 @@ class Flags {
 		std::optional<T> value;
 		if(p.value.has_value() && (value = str_to_value<T>(*p.value)).has_value()) return *value;
 
-		throw RequiredFlagNotGivenError(fmt::format("argument {{{}}} not given", p.label));
+		throw RequiredFlagNotGiven(fmt::format("argument {{{}}} not given", p.label));
 	}
 
 public:
@@ -165,7 +164,7 @@ public:
 	auto parse(Ts ... flags) {
 		try {
 			for(size_t idx = 0; idx < args.size(); idx++) {
-				const auto &str = args[idx];
+				auto str = std::string_view(args[idx]);
 
 				auto [ flag_value, chr_idx ] = flag_present(str, flags...);
 				if constexpr(!std::is_same_v<decltype(flag_value), std::nullptr_t>) { // needed to avoid compilation error on nullptr_t assignment
@@ -190,15 +189,16 @@ public:
 
 			return std::tuple{ parse_flag(flags)... };
 		}
-		catch(RequiredFlagNotGivenError &e) {
+		catch(RequiredFlagNotGiven &e) {
 			help.print_usage(stderr);
 			fmt::print(stderr, "\x1b[1;31m\x1b[4merror:\x1b[0m {}\n", e.msg);
 			// TODO: print help
 			throw e;
 		}
-		catch(InvalidFlagInput &e) {
+		catch(InvalidArgument &e) {
 			help.print_usage(stderr);
 			fmt::print(stderr, "\x1b[1;31m\x1b[4merror:\x1b[0m {}\n", e.msg);
+			throw e;
 		}
 		catch(std::exception &e) {
 			throw e;
@@ -231,12 +231,22 @@ public:
 	}
 	template <typename T>
 	Flag<T, true> flag_required(const std::string &name, const std::string &help, const std::optional<T> default_value = nullopt) {
-		this->help.flag_help.push_back(Help::FlagHelp { name, nullopt, help, default_value.has_value() ? std::optional{std::to_string(*default_value)} : nullopt });
+		if constexpr(stringifiable<T>) {
+			this->help.flag_help.push_back(Help::FlagHelp { name, nullopt, help, default_value.has_value() ? std::optional{std::to_string(*default_value)} : nullopt });
+		}
+		else {
+			this->help.flag_help.push_back(Help::FlagHelp { name, nullopt, help, default_value.has_value() ? std::optional{"yes"} : nullopt });
+		}
 		return Flag<T, true> { name, nullopt, default_value, nullopt };
 	}
 	template <typename T>
 	Flag<T, true> flag_required(const std::string &name, char short_name, const std::string &help, const std::optional<T> default_value = nullopt) {
-		this->help.flag_help.push_back(Help::FlagHelp { name, short_name, help, default_value.has_value() ? std::optional{std::to_string(*default_value)} : nullopt });
+		if constexpr(stringifiable<T>) {
+			this->help.flag_help.push_back(Help::FlagHelp { name, short_name, help, default_value.has_value() ? std::optional{std::to_string(*default_value)} : nullopt });
+		}
+		else {
+			this->help.flag_help.push_back(Help::FlagHelp { name, short_name, help, default_value.has_value() ? std::optional{"yes"} : nullopt });
+		}
 		return Flag<T, true> { name, short_name, default_value, nullopt };
 	}
 
