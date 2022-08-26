@@ -14,17 +14,17 @@ namespace FlagMod {
 	namespace detail {
 
 	/// NOTE: Parameter T* will always be null, it is used for disambiguation when template specialization shits its pants (eg: with std::vector<T>)
-	template <typename T>
-	T str_to_value(std::string_view input, T *);
+	// template <typename T>
+	// T lexical_conversion(std::string_view input, T *);
 
-	template <> inline std::string str_to_value(std::string_view input, std::string *) { return std::string(input);}
-	template <> inline char str_to_value(std::string_view input, char *) { 
+	inline std::string lexical_conversion(std::string_view input, std::string *) { return std::string(input);}
+	inline char lexical_conversion(std::string_view input, char *) { 
 		if(input.length() == 0) throw InvalidArgument("");
 		return input[0]; 
 	}
 
 	template <typename T>
-	inline std::vector<T> str_to_value(std::string_view input, std::vector<T> *) {
+	inline std::vector<T> lexical_conversion(std::string_view input, std::vector<T> *) {
 		std::vector<T> v;
 
 		size_t last_pos = 0;
@@ -32,7 +32,7 @@ namespace FlagMod {
 			if(i == input.length() || (input[i] == ',' && last_pos < input.length())) { // OR short circuit to avoid out of bounds access
 				auto substr = input.substr(last_pos, i-last_pos);
 				try {
-					auto value = str_to_value<T>(substr, static_cast<T *>(nullptr));
+					auto value = lexical_conversion<T>(substr, static_cast<T *>(nullptr));
 					v.push_back(std::move(value));
 				}
 				catch(InvalidArgument &e) {
@@ -47,7 +47,7 @@ namespace FlagMod {
 
 #ifndef DEFINE_NUMERIC_STR_TO_VALUE
 	#define DEFINE_NUMERIC_STR_TO_VALUE(type) \
-		template <> inline type str_to_value(std::string_view input, type *) { \
+		inline type lexical_conversion(std::string_view input, type *) { \
 			type out; \
 			auto [__, ec] = std::from_chars(input.data(), input.data() + input.size(), out); \
 			if(ec == std::errc::invalid_argument) throw InvalidArgument("invalid input for numeric type " #type ": not a number"); \
@@ -57,6 +57,7 @@ namespace FlagMod {
 #endif
 
 	DEFINE_NUMERIC_STR_TO_VALUE(int)
+	DEFINE_NUMERIC_STR_TO_VALUE(unsigned int)
 	DEFINE_NUMERIC_STR_TO_VALUE(long)
 	DEFINE_NUMERIC_STR_TO_VALUE(unsigned long)
 	DEFINE_NUMERIC_STR_TO_VALUE(long long)
@@ -69,14 +70,13 @@ namespace FlagMod {
 	}
 
 template <typename T>
-T str_to_value(std::string_view input) {
-	return detail::str_to_value(input, static_cast<T *>(nullptr));
+T lexical_conversion(std::string_view input) {
+	return detail::lexical_conversion(input, static_cast<T *>(nullptr));
 }
 
 template <typename T>
-concept stringifiable = requires(T x) {
-	std::to_string(x);
+concept lexically_convertible = requires {
+	detail::lexical_conversion(std::string_view{}, static_cast<T*>(nullptr));
 };
-
 
 }

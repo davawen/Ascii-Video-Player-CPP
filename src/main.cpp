@@ -50,12 +50,13 @@ inline const T &sample_array(cv::uint8_t v, const std::vector<T> &vector) {
 
 int main(int argc, char *argv[])
 {
-	// Get input, such as video path, color mode wanted etc...
 	auto flags = FlagMod::Flags(argc, argv)
 		.name("AsciiVideoPlayer")
 		.version("1.3.0");
 
-	auto flag_help = flags.add_switch("help", 'h', "Show this help and exit.");
+	auto flag_help = flags.flag("help", 'h', "Show this help and exit.");
+	auto flag_width = flags.option<unsigned int>("width", 'w', "Wanted width of the terminal in characters");
+	auto flag_height = flags.option<unsigned int>("height", 'h', "Wanted height of the terminal in characters");
 	auto flag_file = flags.positional<std::string>("file");
 
 	auto [help] = flags.parse(flag_help);
@@ -64,7 +65,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	auto [videoPath] = flags.parse(flag_file);
+	auto [width_, height_, videoPath] = flags.parse(flag_width, flag_height, flag_file);
 
 	if(!fs::exists(videoPath) || fs::is_directory(videoPath))
 	{

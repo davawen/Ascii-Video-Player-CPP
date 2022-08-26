@@ -11,7 +11,7 @@
 
 namespace FlagMod {
 struct Help {
-	struct FlagHelp {
+	struct OptionHelp {
 		std::string name;
 		std::optional<char> short_name;
 		std::string help;
@@ -25,7 +25,7 @@ struct Help {
 		}
 	};
 
-	struct SwitchHelp {
+	struct FlagHelp {
 		std::string name;
 		std::optional<char> short_name;
 		std::string help;
@@ -43,8 +43,8 @@ struct Help {
 	};
 
 	std::string name, version, executable;
+	std::vector<OptionHelp> option_help;
 	std::vector<FlagHelp> flag_help;
-	std::vector<SwitchHelp> switch_help;
 	std::vector<PositionalHelp> positional_help;
 
 	std::string format_flag_help(const std::string &name) {
@@ -55,10 +55,10 @@ struct Help {
 			return fmt::format("    {} {}\n", x.format_prefix(), x.format_help());
 		};
 
-		if(auto it = ranges::find_if(flag_help, matching); it != flag_help.end()) {
+		if(auto it = ranges::find_if(option_help, matching); it != option_help.end()) {
 			return format(*it);
 		}
-		else if(auto it = ranges::find_if(switch_help, matching); it != switch_help.end()) {
+		else if(auto it = ranges::find_if(flag_help, matching); it != flag_help.end()) {
 			return format(*it);
 		}
 		return "";
@@ -98,12 +98,12 @@ struct Help {
 
 		print_usage(output);
 
-		if(switch_help.size() > 0) {
-			fmt::print(output, "FLAGS:{}\n", format_flags<SwitchHelp>(switch_help));
+		if(flag_help.size() > 0) {
+			fmt::print(output, "FLAGS:{}\n", format_flags<FlagHelp>(flag_help));
 		}
 
-		if(flag_help.size() > 0){
-			fmt::print(output, "OPTIONS:{}\n", format_flags<FlagHelp>(flag_help));
+		if(option_help.size() > 0){
+			fmt::print(output, "OPTIONS:{}\n", format_flags<OptionHelp>(option_help));
 		}
 	}
 
